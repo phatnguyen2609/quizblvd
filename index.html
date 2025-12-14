@@ -64,7 +64,8 @@
       Upload: () => <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path><polyline points="17 8 12 3 7 8"></polyline><line x1="12" y1="3" x2="12" y2="15"></line></svg>,
       Download: () => <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path><polyline points="7 10 12 15 17 10"></polyline><line x1="12" y1="15" x2="12" y2="3"></line></svg>,
       Smile: () => <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="10"></circle><path d="M8 14s1.5 2 4 2 4-2 4-2"></path><line x1="9" y1="9" x2="9.01" y2="9"></line><line x1="15" y1="9" x2="15.01" y2="9"></line></svg>,
-      Frown: () => <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="10"></circle><path d="M16 16s-1.5-2-4-2-4 2-4 2"></path><line x1="9" y1="9" x2="9.01" y2="9"></line><line x1="15" y1="9" x2="15.01" y2="9"></line></svg>
+      Frown: () => <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="10"></circle><path d="M16 16s-1.5-2-4-2-4 2-4 2"></path><line x1="9" y1="9" x2="9.01" y2="9"></line><line x1="15" y1="9" x2="15.01" y2="9"></line></svg>,
+      Shuffle: () => <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polyline points="16 3 21 3 21 8"></polyline><line x1="4" y1="20" x2="21" y2="3"></line><polyline points="21 16 21 21 16 21"></polyline><line x1="15" y1="15" x2="21" y2="21"></line><line x1="4" y1="4" x2="9" y2="9"></line></svg>
     };
 
     // ===============================
@@ -209,13 +210,11 @@
       const file = gist?.files?.[GH_SYNC.fileName];
       if (!file) return [];
 
-      // Nếu content có sẵn và không bị truncate
       if (typeof file.content === "string" && !file.truncated) {
         try { return normalizeSets(JSON.parse(file.content)); }
         catch { return []; }
       }
 
-      // Nếu truncated -> tải raw_url
       if (file.raw_url) {
         const rawRes = await fetch(file.raw_url, { headers: { "Authorization": `Bearer ${token}` } });
         const text = await rawRes.text();
@@ -296,7 +295,6 @@
               setSets(remoteSets);
               setGhStatus({ state: "ok", message: "Đã tải dữ liệu từ GitHub." });
             } else {
-              // Nếu remote rỗng nhưng local có, đẩy local lên (khởi tạo)
               if (sets.length > 0) {
                 await ghSaveSets(ghToken, sets);
                 if (cancelled) return;
@@ -311,10 +309,9 @@
           }
         })();
         return () => { cancelled = true; };
-        // eslint-disable-next-line react-hooks/exhaustive-deps
       }, []);
 
-      // --- Autosync: debounce save to gist when sets changes
+      // --- Autosync
       useEffect(() => {
         if (!ghToken) return;
         if (!ghAutosync) return;
@@ -377,7 +374,6 @@
         }
       };
 
-      // --- Export / Import
       const handleExportData = () => {
         const dataStr = JSON.stringify(sets, null, 2);
         const blob = new Blob([dataStr], { type: 'application/json' });
@@ -416,7 +412,7 @@
         event.target.value = '';
       };
 
-      // --- GitHub: connect / pull / push / disconnect
+      // --- GitHub actions
       const openGitHubModal = () => {
         setGhTokenInput("");
         setShowGhModal(true);
@@ -427,7 +423,6 @@
         if (!token) return alert("Bạn chưa dán token.");
         setGhStatus({ state: "loading", message: "Đang kết nối GitHub..." });
         try {
-          // thử load để xác minh token + ensure gist
           const remote = await ghLoadSets(token);
           setGhToken(token);
           setShowGhModal(false);
@@ -436,7 +431,6 @@
             setSets(remote);
             setGhStatus({ state: "ok", message: "Kết nối OK. Đã tải dữ liệu từ GitHub." });
           } else {
-            // Nếu remote trống -> đẩy local lên để khởi tạo
             if (sets.length > 0) await ghSaveSets(token, sets);
             setGhStatus({ state: "ok", message: "Kết nối OK. GitHub trống → đã khởi tạo dữ liệu." });
           }
@@ -590,7 +584,6 @@
 
       return (
         <div className="space-y-6">
-          {/* Data Tools Bar */}
           <div className="bg-white p-3 rounded-lg shadow-sm border border-slate-200 flex flex-col gap-3 text-sm">
             <div className="flex flex-wrap gap-2 justify-between items-center">
               <span className="text-slate-500 font-medium px-2">Quản lý dữ liệu:</span>
@@ -606,7 +599,6 @@
               </div>
             </div>
 
-            {/* GitHub Sync */}
             <div className="border-t pt-3 flex flex-col gap-2">
               <div className="flex items-center justify-between flex-wrap gap-2">
                 <div className="flex items-center gap-2">
@@ -709,7 +701,6 @@
             </div>
           )}
 
-          {/* GitHub Connect Modal */}
           {showGhModal && (
             <div className="fixed inset-0 bg-black/60 z-50 flex items-center justify-center p-4">
               <div className="bg-white w-full max-w-xl rounded-xl p-6 space-y-4 shadow-2xl">
@@ -973,17 +964,33 @@
       const [index, setIndex] = useState(0);
       const [isFlipped, setIsFlipped] = useState(false);
       const [orientation, setOrientation] = useState('term-def');
+      
+      // Local state to handle shuffling without affecting original order permanently
+      const [displayCards, setDisplayCards] = useState(set?.cards || []);
+
+      // Sync local cards when set updates (e.g. status changes), 
+      // but try to maintain the current order if user shuffled.
+      useEffect(() => {
+        setDisplayCards(prev => {
+          const newMap = new Map(set.cards.map(c => [c.id, c]));
+          // Map existing cards to new data, fallback to new list if length mismatch drastically
+          if (prev.length !== set.cards.length) return set.cards;
+          return prev.map(c => newMap.get(c.id) || c);
+        });
+      }, [set.cards]);
+
+      // Reset when switching sets
+      useEffect(() => {
+        setDisplayCards(set.cards);
+        setIndex(0);
+        setIsFlipped(false);
+      }, [set.id]);
 
       const touchStart = useRef(0);
       const touchEnd = useRef(0);
       const minSwipeDistance = 50;
 
-      useEffect(() => {
-        setIndex(0);
-        setIsFlipped(false);
-      }, [set?.id, orientation]);
-
-      const currentCard = set?.cards?.[index];
+      const currentCard = displayCards?.[index];
       const setId = set?.id;
 
       const cardStatus = currentCard?.status || PROGRESS_STATUS.NEW;
@@ -992,12 +999,18 @@
 
       const handleNext = () => {
         setIsFlipped(false);
-        setTimeout(() => setIndex((prev) => (prev + 1) % set.cards.length), 150);
+        setTimeout(() => setIndex((prev) => (prev + 1) % displayCards.length), 150);
       };
 
       const handlePrev = () => {
         setIsFlipped(false);
-        setTimeout(() => setIndex((prev) => (prev - 1 + set.cards.length) % set.cards.length), 150);
+        setTimeout(() => setIndex((prev) => (prev - 1 + displayCards.length) % displayCards.length), 150);
+      };
+
+      const handleShuffle = () => {
+        setDisplayCards(shuffle([...displayCards]));
+        setIndex(0);
+        setIsFlipped(false);
       };
 
       const handleSpeak = (e) => {
@@ -1017,7 +1030,7 @@
 
       const handleTouchEnd = () => {
         if (!touchStart.current || !touchEnd.current || !isFlipped) return;
-        if (!set?.cards?.length) return;
+        if (!displayCards?.length) return;
 
         const distance = touchStart.current - touchEnd.current;
         const isSwipe = Math.abs(distance) > minSwipeDistance;
@@ -1060,26 +1073,12 @@
             </button>
             <div className="overflow-hidden">
               <h2 className="text-xl font-bold leading-tight truncate">{set.title}</h2>
-              <p className="text-sm text-slate-500">{index + 1} / {set.cards.length}</p>
+              <p className="text-sm text-slate-500">{index + 1} / {displayCards.length}</p>
             </div>
           </div>
 
           <div className="bg-white p-4 rounded-xl shadow-sm border border-slate-200 flex flex-col gap-4 justify-between items-center">
-            <div className="flex justify-center text-sm w-full">
-              <button
-                onClick={() => setOrientation('term-def')}
-                className={`flex-1 px-3 py-1 rounded-l-lg border ${orientation === 'term-def' ? 'bg-indigo-600 text-white border-indigo-600' : 'bg-slate-100 text-slate-600 border-slate-300'}`}
-              >
-                Thuật ngữ → Định nghĩa
-              </button>
-              <button
-                onClick={() => setOrientation('def-term')}
-                className={`flex-1 px-3 py-1 rounded-r-lg border ${orientation === 'def-term' ? 'bg-indigo-600 text-white border-indigo-600' : 'bg-slate-100 text-slate-600 border-slate-300'}`}
-              >
-                Định nghĩa → Thuật ngữ
-              </button>
-            </div>
-
+             {/* Action Buttons */}
             <div className="flex gap-2 w-full">
               <button className="flex-1 flex items-center justify-center gap-2 bg-indigo-100 text-indigo-700 px-4 py-2 rounded-lg font-medium">
                 <Icons.BookOpen /> Thẻ ghi nhớ
@@ -1093,49 +1092,70 @@
             </div>
           </div>
 
-          <div
-            className="perspective-1000 h-[400px] w-full group select-none"
-            onClick={() => setIsFlipped(!isFlipped)}
-            onTouchStart={handleTouchStart}
-            onTouchMove={handleTouchMove}
-            onTouchEnd={handleTouchEnd}
-          >
-            <div className={`relative w-full h-full transition-transform duration-500 transform-style-3d ${isFlipped ? 'rotate-y-180' : ''}`}>
+          <div className="relative">
+            {/* Small Toolbar above card */}
+            <div className="flex justify-end items-center gap-2 mb-2 px-1">
+               <button 
+                onClick={handleShuffle}
+                title="Trộn thẻ"
+                className="p-1.5 text-slate-400 hover:text-indigo-600 bg-white border rounded shadow-sm hover:shadow-md transition-all"
+              >
+                <Icons.Shuffle />
+              </button>
 
-              {/* Front */}
-              <div className="absolute w-full h-full backface-hidden bg-white rounded-2xl shadow-[0_8px_30px_rgb(0,0,0,0.12)] flex flex-col items-center justify-center p-8 border border-slate-100">
-                {/* ✅ FIX: className phải là template literal */}
-                <div className={`absolute top-4 left-4 px-3 py-1 text-xs font-bold rounded-full uppercase tracking-wider
-                  ${cardStatus === PROGRESS_STATUS.NEW ? 'bg-green-100 text-green-700' :
-                    cardStatus === PROGRESS_STATUS.REVIEW ? 'bg-yellow-100 text-yellow-700' :
-                    'bg-indigo-100 text-indigo-700'}`}
-                >
-                  {cardStatus === PROGRESS_STATUS.NEW && 'Học'}
-                  {cardStatus === PROGRESS_STATUS.REVIEW && 'Đang Học'}
-                  {cardStatus === PROGRESS_STATUS.MASTERED && 'Đã Học'}
-                </div>
+              <select 
+                value={orientation} 
+                onChange={(e) => setOrientation(e.target.value)}
+                className="text-xs font-medium text-slate-600 bg-white border border-slate-200 rounded px-2 py-1.5 outline-none hover:border-indigo-400 focus:border-indigo-600 cursor-pointer shadow-sm"
+              >
+                <option value="term-def">Thuật ngữ → Định nghĩa</option>
+                <option value="def-term">Định nghĩa → Thuật ngữ</option>
+              </select>
+            </div>
 
-                <div className="absolute top-4 right-4 text-slate-300 z-10">
-                  <div className="hover:text-indigo-600 transition-colors cursor-pointer p-2" onClick={handleSpeak}>
-                    <Icons.Volume2 />
+            <div
+              className="perspective-1000 h-[400px] w-full group select-none"
+              onClick={() => setIsFlipped(!isFlipped)}
+              onTouchStart={handleTouchStart}
+              onTouchMove={handleTouchMove}
+              onTouchEnd={handleTouchEnd}
+            >
+              <div className={`relative w-full h-full transition-transform duration-500 transform-style-3d ${isFlipped ? 'rotate-y-180' : ''}`}>
+
+                {/* Front */}
+                <div className="absolute w-full h-full backface-hidden bg-white rounded-2xl shadow-[0_8px_30px_rgb(0,0,0,0.12)] flex flex-col items-center justify-center p-8 border border-slate-100">
+                  <div className={`absolute top-4 left-4 px-3 py-1 text-xs font-bold rounded-full uppercase tracking-wider
+                    ${cardStatus === PROGRESS_STATUS.NEW ? 'bg-green-100 text-green-700' :
+                      cardStatus === PROGRESS_STATUS.REVIEW ? 'bg-yellow-100 text-yellow-700' :
+                      'bg-indigo-100 text-indigo-700'}`}
+                  >
+                    {cardStatus === PROGRESS_STATUS.NEW && 'Học'}
+                    {cardStatus === PROGRESS_STATUS.REVIEW && 'Đang Học'}
+                    {cardStatus === PROGRESS_STATUS.MASTERED && 'Đã Học'}
                   </div>
-                </div>
 
-                <div className="text-3xl sm:text-4xl text-center font-medium text-slate-800 break-words w-full max-h-full overflow-y-auto no-scrollbar">
-                  {frontContent}
-                </div>
-                <p className="absolute bottom-6 text-xs text-slate-400 uppercase tracking-widest font-bold">Chạm để lật</p>
-              </div>
-
-              {/* Back */}
-              <div className="absolute w-full h-full backface-hidden bg-indigo-50 rotate-y-180 rounded-2xl shadow-[0_8px_30px_rgb(0,0,0,0.12)] flex flex-col items-center justify-center p-8 border border-indigo-100">
-                <div className="absolute top-4 right-4 text-slate-300 z-10">
-                  <div className="hover:text-indigo-600 transition-colors cursor-pointer p-2" onClick={handleSpeak}>
-                    <Icons.Volume2 />
+                  <div className="absolute top-4 right-4 text-slate-300 z-10">
+                    <div className="hover:text-indigo-600 transition-colors cursor-pointer p-2" onClick={handleSpeak}>
+                      <Icons.Volume2 />
+                    </div>
                   </div>
+
+                  <div className="text-3xl sm:text-4xl text-center font-medium text-slate-800 break-words w-full max-h-full overflow-y-auto no-scrollbar">
+                    {frontContent}
+                  </div>
+                  <p className="absolute bottom-6 text-xs text-slate-400 uppercase tracking-widest font-bold">Chạm để lật</p>
                 </div>
-                <div className="text-2xl sm:text-3xl text-center text-indigo-900 break-words w-full max-h-full overflow-y-auto no-scrollbar">
-                  {backContent}
+
+                {/* Back */}
+                <div className="absolute w-full h-full backface-hidden bg-indigo-50 rotate-y-180 rounded-2xl shadow-[0_8px_30px_rgb(0,0,0,0.12)] flex flex-col items-center justify-center p-8 border border-indigo-100">
+                  <div className="absolute top-4 right-4 text-slate-300 z-10">
+                    <div className="hover:text-indigo-600 transition-colors cursor-pointer p-2" onClick={handleSpeak}>
+                      <Icons.Volume2 />
+                    </div>
+                  </div>
+                  <div className="text-2xl sm:text-3xl text-center text-indigo-900 break-words w-full max-h-full overflow-y-auto no-scrollbar">
+                    {backContent}
+                  </div>
                 </div>
               </div>
             </div>
@@ -1191,12 +1211,27 @@
 
       const [correctCount, setCorrectCount] = useState(0);
       const [wrongCount, setWrongCount] = useState(0);
+      const [initialized, setInitialized] = useState(false);
 
       useEffect(() => {
-        const shuffled = shuffle([...(set?.cards || [])]);
+        if (!set?.cards) return;
+        
+        // --- LOGIC FIX: HỌC DỞ (Resume Learning) ---
+        // Lọc ra các thẻ chưa "Mastered"
+        const candidates = set.cards.filter(c => c.status !== PROGRESS_STATUS.MASTERED);
+        
+        // Nếu còn thẻ chưa thuộc -> học thẻ đó. Nếu thuộc hết rồi -> ôn lại tất cả (Review All).
+        const pool = candidates.length > 0 ? candidates : set.cards;
+
+        const shuffled = shuffle([...pool]);
         setQueue(shuffled);
-        generateQuestion(shuffled[0], set.cards, orientation);
-      }, [orientation, set?.id]);
+        if (shuffled.length > 0) {
+           generateQuestion(shuffled[0], set.cards, orientation);
+        } else {
+           setStatus('finished');
+        }
+        setInitialized(true);
+      }, []); // Empty dependency array -> Only run ONCE when entering Learn Mode
 
       const generateQuestion = (card, allCards, currentOrientation) => {
         if (!card) {
@@ -1247,10 +1282,13 @@
         const nextQueue = queue.slice(1);
         if (status === 'wrong') nextQueue.push(currentQ);
         setQueue(nextQueue);
+        // Note: We use set.cards from props for generating distractors, which is fine
         generateQuestion(nextQueue[0], set.cards, orientation);
       };
 
-      if (status === 'finished') {
+      if (!initialized) return <div className="p-10 text-center">Đang tải...</div>;
+
+      if (status === 'finished' || !currentQ) {
         return (
           <div className="flex flex-col items-center justify-center min-h-[60vh] text-center space-y-6 animate-in zoom-in duration-300">
             <div className="bg-yellow-100 p-6 rounded-full text-yellow-600 mb-4">
@@ -1345,4 +1383,3 @@
   </script>
 </body>
 </html>
-
