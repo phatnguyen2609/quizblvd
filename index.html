@@ -30,7 +30,7 @@
   <div id="root"></div>
 
   <script type="text/babel">
-    const { useState, useEffect, useRef } = React;
+    const { useState, useEffect, useRef, useMemo } = React;
 
     // ===============================
     // CONFIG
@@ -256,7 +256,11 @@
       });
 
       const [view, setView] = useState('home');
-      const [activeSet, setActiveSet] = useState(null);
+      
+      // Sử dụng ID để luôn lấy dữ liệu mới nhất, tránh lỗi đồng bộ
+      const [activeSetId, setActiveSetId] = useState(null);
+      const activeSet = useMemo(() => sets.find(s => s.id === activeSetId) || null, [sets, activeSetId]);
+
       const [activeOrientation, setActiveOrientation] = useState('term-def');
 
       // --- GitHub Sync State
@@ -370,7 +374,7 @@
       const handleDeleteSet = (id) => {
         if (confirm('Bạn có chắc chắn muốn xóa bộ thẻ này?')) {
           setSets(sets.filter(s => s.id !== id));
-          if (activeSet?.id === id) setView('home');
+          if (activeSetId === id) setView('home');
         }
       };
 
@@ -481,7 +485,7 @@
               <HomeView
                 sets={sets}
                 onCreate={() => setView('create')}
-                onSelect={(set) => { setActiveSet(set); setView('study'); }}
+                onSelect={(set) => { setActiveSetId(set.id); setView('study'); }}
                 onDelete={handleDeleteSet}
                 onExport={handleExportData}
                 onImport={handleImportData}
@@ -965,26 +969,24 @@
       const [isFlipped, setIsFlipped] = useState(false);
       const [orientation, setOrientation] = useState('term-def');
       
-      // Local state to handle shuffling without affecting original order permanently
       const [displayCards, setDisplayCards] = useState(set?.cards || []);
 
-      // Sync local cards when set updates (e.g. status changes), 
-      // but try to maintain the current order if user shuffled.
       useEffect(() => {
+        if (!set?.cards) return;
         setDisplayCards(prev => {
           const newMap = new Map(set.cards.map(c => [c.id, c]));
-          // Map existing cards to new data, fallback to new list if length mismatch drastically
           if (prev.length !== set.cards.length) return set.cards;
           return prev.map(c => newMap.get(c.id) || c);
         });
-      }, [set.cards]);
+      }, [set]);
 
-      // Reset when switching sets
       useEffect(() => {
-        setDisplayCards(set.cards);
-        setIndex(0);
-        setIsFlipped(false);
-      }, [set.id]);
+        if(set?.cards) {
+            setDisplayCards(set.cards);
+            setIndex(0);
+            setIsFlipped(false);
+        }
+      }, [set?.id]);
 
       const touchStart = useRef(0);
       const touchEnd = useRef(0);
@@ -1216,22 +1218,17 @@
       useEffect(() => {
         if (!set?.cards) return;
         
-        // --- LOGIC FIX: HỌC DỞ (Resume Learning) ---
-        // Lọc ra các thẻ chưa "Mastered"
-        const candidates = set.cards.filter(c => c.status !== PROGRESS_STATUS.MASTERED);
-        
-        // Nếu còn thẻ chưa thuộc -> học thẻ đó. Nếu thuộc hết rồi -> ôn lại tất cả (Review All).
-        const pool = candidates.length > 0 ? candidates : set.cards;
-
-        const shuffled = shuffle([...pool]);
+        // --- LOGIC GỐC: Trộn ngẫu nhiên TOÀN BỘ danh sách, không lọc thẻ Mastered ---
+        const shuffled = shuffle([...set.cards]);
         setQueue(shuffled);
+        
         if (shuffled.length > 0) {
            generateQuestion(shuffled[0], set.cards, orientation);
         } else {
            setStatus('finished');
         }
         setInitialized(true);
-      }, []); // Empty dependency array -> Only run ONCE when entering Learn Mode
+      }, [set?.id, orientation]); // Thêm dependencies để reset khi đổi bộ thẻ hoặc hướng
 
       const generateQuestion = (card, allCards, currentOrientation) => {
         if (!card) {
