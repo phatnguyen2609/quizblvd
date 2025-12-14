@@ -1,0 +1,1030 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Flashcard Master Pro</title>
+    
+    <!-- 1. Tải thư viện Tailwind CSS (Giao diện) -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    
+    <!-- 2. Tải thư viện React & ReactDOM -->
+    <script crossorigin src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
+    <script crossorigin src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
+    
+    <!-- 3. Tải Babel (Để trình duyệt hiểu được code React ngay trong file HTML) -->
+    <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+
+    <style>
+        /* Hiệu ứng lật thẻ 3D */
+        .perspective-1000 { perspective: 1000px; }
+        .transform-style-3d { transform-style: preserve-3d; }
+        .backface-hidden { backface-visibility: hidden; }
+        .rotate-y-180 { transform: rotateY(180deg); }
+        
+        /* Ẩn thanh cuộn nhưng vẫn cuộn được */
+        .no-scrollbar::-webkit-scrollbar {
+            display: none;
+        }
+        .no-scrollbar {
+            -ms-overflow-style: none;
+            scrollbar-width: none;
+        }
+    </style>
+</head>
+<body class="bg-slate-50 text-slate-800 font-sans">
+    <div id="root"></div>
+
+    <script type="text/babel">
+        const { useState, useEffect, useRef } = React;
+        
+        // --- Helper: Progress Statuses
+        const PROGRESS_STATUS = {
+            NEW: 'new',      // Học
+            REVIEW: 'review',  // Đang Học
+            MASTERED: 'mastered', // Đã Học
+        };
+        
+        // --- Helper: Icons wrapper (Inline SVG)
+        const Icons = {
+            Plus: () => <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><line x1="12" y1="5" x2="12" y2="19"></line><line x1="5" y1="12" x2="19" y2="12"></line></svg>,
+            Trash2: () => <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polyline points="3 6 5 6 21 6"></polyline><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path><line x1="10" y1="11" x2="10" y2="17"></line><line x1="14" y1="11" x2="14" y2="17"></line></svg>,
+            Volume2: () => <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5"></polygon><path d="M19.07 4.93a10 10 0 0 1 0 14.14M15.54 8.46a5 5 0 0 1 0 7.07"></path></svg>,
+            BookOpen: () => <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M2 3h6a4 4 0 0 1 4 4v14a3 3 0 0 0-3-3H2z"></path><path d="M22 3h-6a4 4 0 0 0-4 4v14a3 3 0 0 1 3-3h7z"></path></svg>,
+            Brain: () => <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M9.5 2A2.5 2.5 0 0 1 12 4.5v15a2.5 2.5 0 0 1-4.96.44 2.5 2.5 0 0 1-2.96-3.08 3 3 0 0 1-.34-5.58 2.5 2.5 0 0 1 1.32-4.24 2.5 2.5 0 0 1 1.98-3A2.5 2.5 0 0 1 9.5 2Z"></path><path d="M14.5 2A2.5 2.5 0 0 0 12 4.5v15a2.5 2.5 0 0 0 4.96.44 2.5 2.5 0 0 0 2.96-3.08 3 3 0 0 0 .34-5.58 2.5 2.5 0 0 0-1.32-4.24 2.5 2.5 0 0 0-1.98-3A2.5 2.5 0 0 0 14.5 2Z"></path></svg>,
+            Save: () => <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"></path><polyline points="17 21 17 13 7 13 7 21"></polyline><polyline points="7 3 7 8 15 8"></polyline></svg>,
+            X: () => <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><line x1="18" y1="6" x2="6" y2="18"></line><line x1="6" y1="6" x2="18" y2="18"></line></svg>,
+            ArrowRight: () => <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><line x1="5" y1="12" x2="19" y2="12"></line><polyline points="12 5 19 12 12 19"></polyline></svg>,
+            ArrowLeft: () => <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><line x1="19" y1="12" x2="5" y2="12"></line><polyline points="12 19 5 12 12 5"></polyline></svg>,
+            Check: () => <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polyline points="20 6 9 17 4 12"></polyline></svg>,
+            RotateCcw: () => <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M1 4v6h6"></path><path d="M3.51 15a9 9 0 1 0 2.13-9.36L1 10"></path></svg>,
+            Upload: () => <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path><polyline points="17 8 12 3 7 8"></polyline><line x1="12" y1="3" x2="12" y2="15"></line></svg>,
+            Download: () => <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path><polyline points="7 10 12 15 17 10"></polyline><line x1="12" y1="15" x2="12" y2="3"></line></svg>,
+            FileJson: () => <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M14.5 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V7.5L14.5 2z"></path><polyline points="14 2 14 8 20 8"></polyline></svg>,
+            Smile: () => <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="10"></circle><path d="M8 14s1.5 2 4 2 4-2 4-2"></path><line x1="9" y1="9" x2="9.01" y2="9"></line><line x1="15" y1="9" x2="15.01" y2="9"></line></svg>,
+            Frown: () => <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="10"></circle><path d="M16 16s-1.5-2-4-2-4 2-4 2"></path><line x1="9" y1="9" x2="9.01" y2="9"></line><line x1="15" y1="9" x2="15.01" y2="9"></line></svg>
+        };
+
+        // --- Helper: Text to Speech ---
+        const speakText = (text, lang = 'en-US') => {
+            if ('speechSynthesis' in window) {
+                window.speechSynthesis.cancel();
+                const utterance = new SpeechSynthesisUtterance(text);
+                const isVietnamese = /[àáạảãâầấậẩẫăằắặẳẵèéẹẻẽêềếệểễìíịỉĩòóọỏõôồốộổỗơờớợởỡùúụủũưừứựửữỳýỵỷỹđ]/i.test(text);
+                utterance.lang = isVietnamese ? 'vi-VN' : 'en-US';
+                utterance.rate = 0.9;
+                window.speechSynthesis.speak(utterance);
+            }
+        };
+
+        // --- Helper: Shuffle Array ---
+        const shuffle = (array) => {
+            let currentIndex = array.length, randomIndex;
+            const newArray = [...array]; // Clone to avoid modifying original state
+            while (currentIndex !== 0) {
+                randomIndex = Math.floor(Math.random() * currentIndex);
+                currentIndex--;
+                [newArray[currentIndex], newArray[randomIndex]] = [newArray[randomIndex], newArray[currentIndex]];
+            }
+            return newArray;
+        };
+
+        // --- Helper: Calculate Progress ---
+        const calculateProgress = (cards) => {
+            const total = cards.length;
+            if (total === 0) return { counts: { new: 0, review: 0, mastered: 0 }, breakdown: { new: 0, review: 0, mastered: 0 } };
+
+            const counts = cards.reduce((acc, card) => {
+                const status = card.status || PROGRESS_STATUS.NEW;
+                acc[status] = (acc[status] || 0) + 1;
+                return acc;
+            }, { new: 0, review: 0, mastered: 0 });
+
+            // Calculate percentages and ensure they sum to 100
+            const percentNew = Math.round((counts.new / total) * 100);
+            const percentReview = Math.round((counts.review / total) * 100);
+            let percentMastered = 100 - percentNew - percentReview;
+            
+            // Adjust if rounding error causes sum > 100
+            if (percentMastered < 0) {
+                percentMastered = 0;
+            }
+
+            return { 
+                counts, 
+                breakdown: { new: percentNew, review: percentReview, mastered: percentMastered } 
+            };
+        };
+
+
+        function App() {
+            // --- State ---
+            const [sets, setSets] = useState(() => {
+                try {
+                    const saved = localStorage.getItem('flashcard_sets');
+                    const parsedSets = saved ? JSON.parse(saved) : [];
+                    
+                    // Initialize status for old/new data
+                    return parsedSets.map(set => ({
+                        ...set,
+                        cards: set.cards.map(card => ({
+                            ...card,
+                            // Set default status if missing
+                            status: card.status || PROGRESS_STATUS.NEW 
+                        }))
+                    }));
+                } catch (e) {
+                    console.error("Lỗi tải dữ liệu LocalStorage:", e);
+                    return [];
+                }
+            });
+            
+            const [view, setView] = useState('home'); 
+            const [activeSet, setActiveSet] = useState(null);
+            // State để lưu hướng học được chọn (Term-Def hoặc Def-Term)
+            const [activeOrientation, setActiveOrientation] = useState('term-def'); 
+            
+            // --- Persistence ---
+            useEffect(() => {
+                localStorage.setItem('flashcard_sets', JSON.stringify(sets));
+            }, [sets]);
+
+            // --- Progress Logic ---
+            const updateCardStatus = (setId, cardId, action) => {
+                setSets(prevSets => prevSets.map(set => {
+                    if (set.id !== setId) return set;
+                    
+                    const newCards = set.cards.map(card => {
+                        if (card.id !== cardId) return card;
+                        
+                        let newStatus = card.status || PROGRESS_STATUS.NEW;
+                        
+                        // Action: Known / Correct (Thăng cấp)
+                        if (action === 'known' || action === 'correct') {
+                            if (newStatus === PROGRESS_STATUS.NEW) newStatus = PROGRESS_STATUS.REVIEW;
+                            else if (newStatus === PROGRESS_STATUS.REVIEW) newStatus = PROGRESS_STATUS.MASTERED;
+                            // If MASTERED, stays MASTERED
+                        } 
+                        // Action: Unknown / Wrong (Giáng cấp/Học lại)
+                        else if (action === 'unknown' || action === 'wrong') {
+                            if (newStatus === PROGRESS_STATUS.MASTERED) newStatus = PROGRESS_STATUS.REVIEW;
+                            else newStatus = PROGRESS_STATUS.NEW; // Review/New go back to NEW
+                        }
+                        
+                        return { ...card, status: newStatus };
+                    });
+
+                    return { ...set, cards: newCards };
+                }));
+            };
+
+            // --- Actions ---
+            const handleCreateSet = (newSet) => {
+                // Ensure all new cards have the 'new' status and unique IDs
+                const cardsWithStatus = newSet.cards.map(card => ({
+                    ...card,
+                    id: Math.random().toString(36).substr(2, 9),
+                    status: PROGRESS_STATUS.NEW
+                }));
+
+                const setWithId = { ...newSet, id: Date.now(), cards: cardsWithStatus };
+                setSets([setWithId, ...sets]);
+                setView('home');
+            };
+
+            const handleDeleteSet = (id) => {
+                if (confirm('Bạn có chắc chắn muốn xóa bộ thẻ này?')) {
+                    setSets(sets.filter(s => s.id !== id));
+                    if (activeSet?.id === id) setView('home');
+                }
+            };
+
+            // --- Export / Import Features ---
+            const handleExportData = () => {
+                const dataStr = JSON.stringify(sets, null, 2);
+                const blob = new Blob([dataStr], { type: 'application/json' });
+                const url = URL.createObjectURL(blob);
+                const a = document.createElement('a');
+                a.href = url;
+                a.download = `flashcard_backup_${new Date().toISOString().slice(0,10)}.json`;
+                document.body.appendChild(a);
+                a.click();
+                document.body.removeChild(a);
+            };
+
+            const handleImportData = (event) => {
+                const file = event.target.files[0];
+                if (!file) return;
+
+                const reader = new FileReader();
+                reader.onload = (e) => {
+                    try {
+                        const importedSets = JSON.parse(e.target.result);
+                        if (Array.isArray(importedSets)) {
+                            if(confirm('Hành động này sẽ GỘP thêm dữ liệu vào danh sách hiện tại. Bạn có muốn tiếp tục?')) {
+                                // Re-process imported cards to ensure status and unique IDs
+                                const processedSets = importedSets.map(set => ({
+                                    ...set,
+                                    id: set.id || Date.now(),
+                                    cards: set.cards.map(card => ({
+                                        ...card,
+                                        id: card.id || Math.random().toString(36).substr(2, 9),
+                                        status: card.status || PROGRESS_STATUS.NEW
+                                    }))
+                                }));
+                                setSets(prev => [...processedSets, ...prev]);
+                                alert('Nhập dữ liệu thành công!');
+                            }
+                        } else {
+                            alert('File không hợp lệ!');
+                        }
+                    } catch (err) {
+                        alert('Lỗi đọc file JSON!');
+                        console.error("Import error:", err);
+                    }
+                };
+                reader.readAsText(file);
+                event.target.value = '';
+            };
+
+            // --- Render ---
+            const renderContent = () => {
+                switch (view) {
+                    case 'home':
+                        return (
+                            <HomeView 
+                                sets={sets} 
+                                onCreate={() => setView('create')} 
+                                onSelect={(set) => { setActiveSet(set); setView('study'); }}
+                                onDelete={handleDeleteSet}
+                                onExport={handleExportData}
+                                onImport={handleImportData}
+                                calculateProgress={calculateProgress}
+                            />
+                        );
+                    case 'create':
+                        return <CreateSetView onSave={handleCreateSet} onCancel={() => setView('home')} />;
+                    case 'study':
+                        return (
+                            <StudyView 
+                                set={activeSet} 
+                                onBack={() => setView('home')} 
+                                onLearnMode={(orientation) => { setActiveOrientation(orientation); setView('learn'); }}
+                                updateCardStatus={updateCardStatus}
+                            />
+                        );
+                    case 'learn':
+                        return (
+                            <LearnModeView 
+                                set={activeSet} 
+                                onBack={() => setView('study')}
+                                orientation={activeOrientation}
+                                updateCardStatus={updateCardStatus}
+                            />
+                        );
+                    default:
+                        return <HomeView sets={sets} />;
+                }
+            };
+
+            return (
+                <div className="min-h-screen pb-20">
+                    <header className="bg-indigo-600 text-white p-4 shadow-md sticky top-0 z-10">
+                        <div className="max-w-3xl mx-auto flex items-center justify-between">
+                            <div className="flex items-center gap-2 cursor-pointer" onClick={() => setView('home')}>
+                                <Icons.Brain />
+                                <h1 className="text-xl font-bold">FlashMemo Pro</h1>
+                            </div>
+                            {view !== 'home' && (
+                                <button onClick={() => setView('home')} className="text-sm font-medium hover:text-indigo-200">
+                                    Trang chủ
+                                </button>
+                            )}
+                        </div>
+                    </header>
+
+                    <main className="max-w-3xl mx-auto p-4">
+                        {renderContent()}
+                    </main>
+                </div>
+            );
+        }
+
+        // ==========================================
+        // VIEW: Home 
+        // ==========================================
+        function HomeView({ sets, onCreate, onSelect, onDelete, onExport, onImport, calculateProgress }) {
+            
+            const renderProgressBar = (progress) => {
+                const { breakdown } = progress;
+                return (
+                    <div className="w-full h-2 bg-slate-200 rounded-full overflow-hidden mt-2">
+                        <div className="flex h-full">
+                            {/* NEW: Green (Học) */}
+                            {breakdown.new > 0 && (
+                                <div title={`${breakdown.new}% Học`} style={{ width: `${breakdown.new}%` }} className="bg-green-400"></div>
+                            )}
+                            {/* REVIEW: Yellow (Đang Học) */}
+                            {breakdown.review > 0 && (
+                                <div title={`${breakdown.review}% Đang Học`} style={{ width: `${breakdown.review}%` }} className="bg-yellow-400"></div>
+                            )}
+                            {/* MASTERED: Indigo (Đã Học) */}
+                            {breakdown.mastered > 0 && (
+                                <div title={`${breakdown.mastered}% Đã Học`} style={{ width: `${breakdown.mastered}%` }} className="bg-indigo-600"></div>
+                            )}
+                        </div>
+                    </div>
+                );
+            };
+
+            return (
+                <div className="space-y-6">
+                    {/* Data Tools Bar */}
+                    <div className="bg-white p-3 rounded-lg shadow-sm border border-slate-200 flex flex-wrap gap-2 justify-between items-center text-sm">
+                        <span className="text-slate-500 font-medium px-2">Quản lý dữ liệu:</span>
+                        <div className="flex gap-2">
+                             <label className="flex items-center gap-1 px-3 py-1.5 bg-slate-100 hover:bg-slate-200 rounded-md cursor-pointer text-slate-700 transition-colors">
+                                <Icons.Upload />
+                                <span>Nhập File</span>
+                                <input type="file" accept=".json" className="hidden" onChange={onImport} />
+                            </label>
+                            <button onClick={onExport} className="flex items-center gap-1 px-3 py-1.5 bg-slate-100 hover:bg-slate-200 rounded-md text-slate-700 transition-colors">
+                                <Icons.Download /> Xuất File
+                            </button>
+                        </div>
+                    </div>
+
+                    <div className="flex justify-between items-center mt-6">
+                        <h2 className="text-2xl font-bold text-slate-700">Bộ thẻ của bạn</h2>
+                        <button 
+                            onClick={onCreate}
+                            className="bg-indigo-600 hover:bg-indigo-700 text-white px-4 py-2 rounded-full flex items-center gap-2 shadow-lg transition-transform hover:scale-105 active:scale-95"
+                        >
+                            <Icons.Plus /> Tạo mới
+                        </button>
+                    </div>
+
+                    {sets.length === 0 ? (
+                        <div className="text-center py-20 text-slate-400 border-2 border-dashed border-slate-300 rounded-xl">
+                            <div className="mx-auto mb-4 w-12 h-12 opacity-50 flex justify-center items-center"><Icons.BookOpen /></div>
+                            <p>Chưa có bộ thẻ nào.</p>
+                            <p className="text-sm">Nhấn "Tạo mới" hoặc "Nhập File" để bắt đầu!</p>
+                        </div>
+                    ) : (
+                        <div className="grid gap-4 sm:grid-cols-2">
+                            {sets.map(set => {
+                                const progress = calculateProgress(set.cards);
+                                const totalCards = set.cards.length;
+
+                                return (
+                                    <div 
+                                        key={set.id} 
+                                        className="bg-white p-5 rounded-xl shadow-sm border border-slate-200 hover:shadow-md transition-shadow relative group"
+                                    >
+                                        <div onClick={() => onSelect(set)} className="cursor-pointer">
+                                            <h3 className="font-bold text-lg mb-1 pr-8 truncate text-slate-800">{set.title}</h3>
+                                            <p className="text-slate-500 text-sm flex items-center gap-1">
+                                                {totalCards} thuật ngữ
+                                            </p>
+                                            {totalCards > 0 && renderProgressBar(progress)}
+                                            {totalCards > 0 && (
+                                                <div className="flex justify-between text-xs mt-1 text-slate-500">
+                                                    <span>Học ({progress.breakdown.new}%)</span>
+                                                    <span>Đã Học ({progress.breakdown.mastered}%)</span>
+                                                </div>
+                                            )}
+                                        </div>
+                                        
+                                        <button 
+                                            onClick={(e) => { e.stopPropagation(); onDelete(set.id); }}
+                                            className="absolute top-4 right-4 text-slate-300 hover:text-red-500 opacity-100 sm:opacity-0 group-hover:opacity-100 transition-opacity p-2"
+                                        >
+                                            <Icons.Trash2 />
+                                        </button>
+                                    </div>
+                                );
+                            })}
+                        </div>
+                    )}
+                </div>
+            );
+        }
+
+        // ==========================================
+        // VIEW: Create/Edit Set (Giữ nguyên)
+        // ==========================================
+        function CreateSetView({ onSave, onCancel }) {
+            const [title, setTitle] = useState('');
+            // Ensure initial card has a unique ID for React keys
+            const [cards, setCards] = useState([{ term: '', def: '', id: Math.random().toString(36).substr(2, 9) }]); 
+            const [showImport, setShowImport] = useState(false);
+            
+            // Import State
+            const [importText, setImportText] = useState('');
+            const [separatorType, setSeparatorType] = useState('tab');
+            const [customSeparator, setCustomSeparator] = useState(' - ');
+
+            const addCard = () => {
+                setCards([...cards, { term: '', def: '', id: Math.random().toString(36).substr(2, 9) }]);
+            };
+
+            const updateCard = (index, field, value) => {
+                const newCards = [...cards];
+                newCards[index][field] = value;
+                setCards(newCards);
+            };
+
+            const removeCard = (index) => {
+                if (cards.length > 1) {
+                    setCards(cards.filter((_, i) => i !== index));
+                }
+            };
+
+            const getSeparator = () => {
+                if (separatorType === 'tab') return '\t';
+                if (separatorType === 'comma') return ',';
+                return customSeparator;
+            };
+
+            const parseImportText = () => {
+                const sep = getSeparator();
+                const lines = importText.split('\n');
+                return lines
+                    .filter(line => line.trim().length > 0)
+                    .map(line => {
+                        const parts = line.split(sep);
+                        return {
+                            term: parts[0]?.trim() || '',
+                            def: parts.slice(1).join(sep)?.trim() || '', 
+                        };
+                    });
+            };
+
+            const handleBulkImport = () => {
+                if (!importText.trim()) return;
+                const parsed = parseImportText();
+                const newCards = parsed.map(p => ({
+                    ...p,
+                    id: Math.random().toString(36).substr(2, 9),
+                    status: PROGRESS_STATUS.NEW // Thêm trạng thái mặc định
+                }));
+
+                setCards(newCards.length > 0 ? newCards : cards);
+                setShowImport(false);
+                setImportText('');
+            };
+
+            const handleSave = () => {
+                if (!title.trim()) return alert('Vui lòng nhập tiêu đề');
+                const validCards = cards.filter(c => c.term.trim() || c.def.trim());
+                if (validCards.length === 0) return alert('Cần ít nhất 1 thẻ');
+                onSave({ title, cards: validCards });
+            };
+
+            const previewData = parseImportText().slice(0, 3);
+
+            return (
+                <div className="bg-white min-h-[80vh] rounded-xl shadow-sm p-4 sm:p-6 space-y-6">
+                    <div className="flex justify-between items-center border-b pb-4">
+                        <h2 className="text-xl font-bold text-slate-700">Tạo học phần mới</h2>
+                        <button onClick={onCancel} className="p-2 text-slate-500 hover:bg-slate-100 rounded-full">
+                            <Icons.X />
+                        </button>
+                    </div>
+
+                    <input 
+                        type="text" 
+                        placeholder='Tiêu đề (ví dụ: "Từ vựng IELTS - Chủ đề 1")'
+                        className="w-full text-lg p-3 border-b-2 border-indigo-100 focus:border-indigo-600 outline-none transition-colors"
+                        value={title}
+                        onChange={(e) => setTitle(e.target.value)}
+                    />
+
+                    <div className="flex gap-2">
+                        <button 
+                            onClick={() => setShowImport(true)}
+                            className="text-indigo-600 text-sm font-bold flex items-center gap-1 hover:bg-indigo-50 px-4 py-2 rounded-lg border border-indigo-100"
+                        >
+                            <Icons.Upload /> + Nhập từ Word, Excel...
+                        </button>
+                    </div>
+
+                    {/* Import Modal */}
+                    {showImport && (
+                        <div className="fixed inset-0 bg-black/60 z-50 flex items-center justify-center p-4">
+                            <div className="bg-white w-full max-w-2xl max-h-[90vh] overflow-y-auto rounded-xl p-6 space-y-4 shadow-2xl">
+                                <div className="flex justify-between items-start">
+                                    <h3 className="font-bold text-xl text-slate-800">Nhập dữ liệu nhanh</h3>
+                                    <button onClick={() => setShowImport(false)} className="text-slate-400 hover:text-slate-600">
+                                        <Icons.X />
+                                    </button>
+                                </div>
+                                
+                                <p className="text-sm text-slate-500">
+                                    Sao chép và dán dữ liệu vào bên dưới (Mỗi thẻ một dòng).
+                                </p>
+                                
+                                <textarea 
+                                    className="w-full h-40 border-2 border-slate-200 focus:border-indigo-500 p-3 rounded-lg text-sm font-mono bg-slate-50 outline-none transition-colors"
+                                    placeholder={`Dog\tCon chó\nCat\tCon mèo\nHello\tXin chào`}
+                                    value={importText}
+                                    onChange={(e) => setImportText(e.target.value)}
+                                />
+
+                                <div className="bg-slate-50 p-4 rounded-lg border border-slate-200 space-y-3">
+                                    <div className="text-sm font-semibold text-slate-700">Ký tự ngăn cách:</div>
+                                    <div className="flex flex-wrap gap-4">
+                                        <label className="flex items-center gap-2 cursor-pointer">
+                                            <input type="radio" name="sep" checked={separatorType === 'tab'} onChange={() => setSeparatorType('tab')} className="accent-indigo-600"/>
+                                            <span>Tab</span>
+                                        </label>
+                                        <label className="flex items-center gap-2 cursor-pointer">
+                                            <input type="radio" name="sep" checked={separatorType === 'comma'} onChange={() => setSeparatorType('comma')} className="accent-indigo-600"/>
+                                            <span>Dấu phẩy (,)</span>
+                                        </label>
+                                        <label className="flex items-center gap-2 cursor-pointer">
+                                            <input type="radio" name="sep" checked={separatorType === 'custom'} onChange={() => setSeparatorType('custom')} className="accent-indigo-600"/>
+                                            <span>Tùy chỉnh:</span>
+                                            <input 
+                                                type="text" 
+                                                value={customSeparator} 
+                                                onChange={(e) => { setCustomSeparator(e.target.value); setSeparatorType('custom'); }}
+                                                className="w-16 border-b border-slate-400 bg-transparent px-1 focus:border-indigo-600 outline-none text-center font-mono"
+                                                placeholder=" - "
+                                            />
+                                        </label>
+                                    </div>
+                                </div>
+
+                                {importText && (
+                                    <div className="space-y-2">
+                                        <div className="text-xs font-bold text-slate-400 uppercase">Xem trước (3 dòng đầu)</div>
+                                        <div className="border rounded-lg overflow-hidden text-sm">
+                                            <div className="grid grid-cols-2 bg-slate-100 p-2 font-bold text-slate-600 border-b">
+                                                <div>Thuật ngữ</div>
+                                                <div>Định nghĩa</div>
+                                            </div>
+                                            {previewData.map((row, i) => (
+                                                <div key={i} className="grid grid-cols-2 p-2 border-b last:border-0 hover:bg-slate-50">
+                                                    <div className="truncate pr-2">{row.term || <span className="text-red-400 italic">Trống</span>}</div>
+                                                    <div className="truncate">{row.def || <span className="text-red-400 italic">Trống</span>}</div>
+                                                </div>
+                                            ))}
+                                        </div>
+                                    </div>
+                                )}
+
+                                <div className="flex justify-end gap-2 pt-2">
+                                    <button onClick={() => setShowImport(false)} className="px-5 py-2 text-slate-600 font-medium hover:bg-slate-100 rounded-lg">Hủy</button>
+                                    <button onClick={handleBulkImport} className="px-6 py-2 bg-indigo-600 text-white font-bold rounded-lg hover:bg-indigo-700 shadow-md">
+                                        Nhập {parseImportText().length} thẻ
+                                    </button>
+                                </div>
+                            </div>
+                        </div>
+                    )}
+
+                    <div className="space-y-4">
+                        {cards.map((card, idx) => (
+                            <div key={card.id} className="bg-slate-50 p-4 rounded-lg border border-slate-200 relative group">
+                                <div className="flex justify-between items-center mb-2">
+                                    <span className="text-xs font-bold text-slate-400 uppercase tracking-wider">{idx + 1}</span>
+                                    <button onClick={() => removeCard(idx)} className="text-slate-300 hover:text-red-500">
+                                        <Icons.Trash2 />
+                                    </button>
+                                </div>
+                                <div className="grid sm:grid-cols-2 gap-4">
+                                    <div className="space-y-1">
+                                        <input 
+                                            className="w-full bg-transparent border-b border-slate-300 focus:border-indigo-500 p-2 outline-none"
+                                            placeholder="Thuật ngữ"
+                                            value={card.term}
+                                            onChange={(e) => updateCard(idx, 'term', e.target.value)}
+                                        />
+                                        <span className="text-[10px] text-slate-400 uppercase">Thuật ngữ</span>
+                                    </div>
+                                    <div className="space-y-1">
+                                        <input 
+                                            className="w-full bg-transparent border-b border-slate-300 focus:border-indigo-500 p-2 outline-none"
+                                            placeholder="Định nghĩa"
+                                            value={card.def}
+                                            onChange={(e) => updateCard(idx, 'def', e.target.value)}
+                                        />
+                                        <span className="text-[10px] text-slate-400 uppercase">Định nghĩa</span>
+                                    </div>
+                                </div>
+                            </div>
+                        ))}
+                    </div>
+
+                    <button 
+                        onClick={addCard}
+                        className="w-full py-4 border-2 border-dashed border-indigo-200 text-indigo-500 font-bold rounded-xl hover:bg-indigo-50 hover:border-indigo-400 transition-all uppercase tracking-wide text-sm"
+                    >
+                        + Thêm thẻ
+                    </button>
+
+                    <div className="sticky bottom-4 flex justify-end">
+                        <button 
+                            onClick={handleSave}
+                            className="bg-indigo-600 text-white px-8 py-3 rounded-full shadow-xl hover:bg-indigo-700 font-bold flex items-center gap-2"
+                        >
+                            <Icons.Save /> Hoàn tất
+                        </button>
+                    </div>
+                </div>
+            );
+        }
+
+        // ==========================================
+        // VIEW: Study
+        // ==========================================
+        function StudyView({ set, onBack, onLearnMode, updateCardStatus }) {
+            const [index, setIndex] = useState(0);
+            const [isFlipped, setIsFlipped] = useState(false);
+            const [orientation, setOrientation] = useState('term-def'); // 'term-def' or 'def-term'
+
+            // Ref cho thao tác vuốt/quẹt
+            const touchStart = useRef(0);
+            const touchEnd = useRef(0);
+            const minSwipeDistance = 50; // Khoảng cách quẹt tối thiểu
+
+            useEffect(() => { 
+                setIndex(0); 
+                setIsFlipped(false); 
+            }, [set.id, orientation]);
+
+            const currentCard = set.cards[index];
+            const setId = set.id;
+            const cardStatus = currentCard.status || PROGRESS_STATUS.NEW;
+
+            const frontContent = orientation === 'term-def' ? currentCard.term : currentCard.def;
+            const backContent = orientation === 'term-def' ? currentCard.def : currentCard.term;
+
+            const handleNext = () => {
+                setIsFlipped(false);
+                setTimeout(() => setIndex((prev) => (prev + 1) % set.cards.length), 150);
+            };
+
+            const handlePrev = () => {
+                setIsFlipped(false);
+                setTimeout(() => setIndex((prev) => (prev - 1 + set.cards.length) % set.cards.length), 150);
+            };
+
+            const handleSpeak = (e) => {
+                e.stopPropagation();
+                const textToSpeak = isFlipped ? backContent : frontContent;
+                speakText(textToSpeak);
+            };
+
+            // --- Touch Handlers for Swipe ---
+            const handleTouchStart = (e) => {
+                touchEnd.current = null; // reset
+                touchStart.current = e.targetTouches[0].clientX;
+            };
+
+            const handleTouchMove = (e) => (touchEnd.current = e.targetTouches[0].clientX);
+
+            const handleTouchEnd = () => {
+                if (!touchStart.current || !touchEnd.current || !isFlipped) return; // Chỉ xử lý khi thẻ đã lật
+                if (set.cards.length === 0) return;
+
+                const distance = touchStart.current - touchEnd.current;
+                const isSwipe = Math.abs(distance) > minSwipeDistance;
+
+                if (!isSwipe) {
+                    // Nếu không phải swipe, xử lý lật thẻ nếu không phải là sự kiện của nút
+                    return; 
+                }
+
+                const swipeDirection = distance > 0 ? 'left' : 'right';
+
+                // SWIPE LOGIC
+                if (swipeDirection === 'right') {
+                    // Vuốt phải: Đã biết/Thăng cấp
+                    updateCardStatus(setId, currentCard.id, 'known');
+                } else if (swipeDirection === 'left') {
+                    // Vuốt trái: Chưa biết/Giáng cấp
+                    updateCardStatus(setId, currentCard.id, 'unknown');
+                }
+
+                handleNext(); // Chuyển sang thẻ tiếp theo sau khi vuốt
+                touchStart.current = null;
+                touchEnd.current = null;
+            };
+            
+            // --- Keyboard Navigation ---
+            useEffect(() => {
+                const handleKeyDown = (e) => {
+                    if (e.key === 'ArrowRight' && isFlipped) {
+                        updateCardStatus(setId, currentCard.id, 'known');
+                        handleNext();
+                    }
+                    if (e.key === 'ArrowLeft' && isFlipped) {
+                        updateCardStatus(setId, currentCard.id, 'unknown');
+                        handleNext();
+                    }
+                    if (e.key === ' ' || e.key === 'Enter') setIsFlipped(prev => !prev);
+                };
+                window.addEventListener('keydown', handleKeyDown);
+                return () => window.removeEventListener('keydown', handleKeyDown);
+            }, [index, isFlipped, set.cards.length, updateCardStatus]);
+
+            if (!currentCard) {
+                return <div className="text-center py-10 text-slate-500">Bộ thẻ trống.</div>
+            }
+
+            return (
+                <div className="space-y-6">
+                    <div className="flex items-center gap-2 mb-4">
+                        <button onClick={onBack} className="p-2 hover:bg-slate-200 rounded-full">
+                            <Icons.ArrowLeft />
+                        </button>
+                        <div className="overflow-hidden">
+                            <h2 className="text-xl font-bold leading-tight truncate">{set.title}</h2>
+                            <p className="text-sm text-slate-500">{index + 1} / {set.cards.length}</p>
+                        </div>
+                    </div>
+
+                    <div className="bg-white p-4 rounded-xl shadow-sm border border-slate-200 flex flex-col gap-4 justify-between items-center">
+                         {/* NEW: Orientation Toggle */}
+                        <div className="flex justify-center text-sm w-full">
+                            <button 
+                                onClick={() => setOrientation('term-def')}
+                                className={`flex-1 px-3 py-1 rounded-l-lg border ${orientation === 'term-def' ? 'bg-indigo-600 text-white border-indigo-600' : 'bg-slate-100 text-slate-600 border-slate-300'}`}
+                            >
+                                Thuật ngữ → Định nghĩa
+                            </button>
+                            <button 
+                                onClick={() => setOrientation('def-term')}
+                                className={`flex-1 px-3 py-1 rounded-r-lg border ${orientation === 'def-term' ? 'bg-indigo-600 text-white border-indigo-600' : 'bg-slate-100 text-slate-600 border-slate-300'}`}
+                            >
+                                Định nghĩa → Thuật ngữ
+                            </button>
+                        </div>
+                        
+                        <div className="flex gap-2 w-full">
+                            <button className="flex-1 flex items-center justify-center gap-2 bg-indigo-100 text-indigo-700 px-4 py-2 rounded-lg font-medium">
+                                <Icons.BookOpen /> Thẻ ghi nhớ
+                            </button>
+                            <button 
+                                onClick={() => onLearnMode(orientation)}
+                                className="flex-1 flex items-center justify-center gap-2 hover:bg-slate-100 text-slate-600 px-4 py-2 rounded-lg font-medium transition-colors"
+                            >
+                                <Icons.Brain /> Học
+                            </button>
+                        </div>
+                    </div>
+
+                    <div 
+                        className="perspective-1000 h-[400px] w-full group select-none"
+                        onClick={() => setIsFlipped(!isFlipped)}
+                        onTouchStart={handleTouchStart} 
+                        onTouchMove={handleTouchMove} 
+                        onTouchEnd={handleTouchEnd}
+                    >
+                        <div className={`relative w-full h-full transition-transform duration-500 transform-style-3d ${isFlipped ? 'rotate-y-180' : ''}`}>
+                            
+                            {/* Front */}
+                            <div className="absolute w-full h-full backface-hidden bg-white rounded-2xl shadow-[0_8px_30px_rgb(0,0,0,0.12)] flex flex-col items-center justify-center p-8 border border-slate-100">
+                                <div className="absolute top-4 left-4 px-3 py-1 text-xs font-bold rounded-full uppercase tracking-wider 
+                                    ${cardStatus === PROGRESS_STATUS.NEW ? 'bg-green-100 text-green-700' : 
+                                    cardStatus === PROGRESS_STATUS.REVIEW ? 'bg-yellow-100 text-yellow-700' : 
+                                    'bg-indigo-100 text-indigo-700'}"
+                                >
+                                    {cardStatus === PROGRESS_STATUS.NEW && 'Học'}
+                                    {cardStatus === PROGRESS_STATUS.REVIEW && 'Đang Học'}
+                                    {cardStatus === PROGRESS_STATUS.MASTERED && 'Đã Học'}
+                                </div>
+                                <div className="absolute top-4 right-4 text-slate-300 z-10">
+                                    <div className="hover:text-indigo-600 transition-colors cursor-pointer p-2" onClick={handleSpeak}>
+                                         <Icons.Volume2 />
+                                    </div>
+                                </div>
+                                <div className="text-3xl sm:text-4xl text-center font-medium text-slate-800 break-words w-full max-h-full overflow-y-auto no-scrollbar">
+                                    {frontContent}
+                                </div>
+                                <p className="absolute bottom-6 text-xs text-slate-400 uppercase tracking-widest font-bold">Chạm để lật</p>
+                            </div>
+
+                            {/* Back */}
+                            <div className="absolute w-full h-full backface-hidden bg-indigo-50 rotate-y-180 rounded-2xl shadow-[0_8px_30px_rgb(0,0,0,0.12)] flex flex-col items-center justify-center p-8 border border-indigo-100">
+                                <div className="absolute top-4 right-4 text-slate-300 z-10">
+                                    <div className="hover:text-indigo-600 transition-colors cursor-pointer p-2" onClick={handleSpeak}>
+                                         <Icons.Volume2 />
+                                    </div>
+                                </div>
+                                <div className="text-2xl sm:text-3xl text-center text-indigo-900 break-words w-full max-h-full overflow-y-auto no-scrollbar">
+                                    {backContent}
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    {/* NEW: Action buttons (Visible only when flipped) */}
+                    {isFlipped && (
+                        <div className="flex justify-between items-center bg-white p-4 rounded-xl shadow-md animate-in slide-in-from-bottom-5 duration-300">
+                            <button 
+                                onClick={() => { updateCardStatus(setId, currentCard.id, 'unknown'); handleNext(); }}
+                                className="flex flex-col items-center justify-center gap-1 p-3 text-red-500 hover:bg-red-50 rounded-lg transition-colors w-1/2"
+                            >
+                                <Icons.Frown />
+                                <span className="text-sm font-medium">Chưa biết (Quẹt Trái)</span>
+                            </button>
+                            
+                            <div className="h-8 w-px bg-slate-200"></div>
+
+                            <button 
+                                onClick={() => { updateCardStatus(setId, currentCard.id, 'known'); handleNext(); }}
+                                className="flex flex-col items-center justify-center gap-1 p-3 text-green-500 hover:bg-green-50 rounded-lg transition-colors w-1/2"
+                            >
+                                <Icons.Smile />
+                                <span className="text-sm font-medium">Đã biết (Quẹt Phải)</span>
+                            </button>
+                        </div>
+                    )}
+                    
+                    {/* Navigation buttons */}
+                    <div className="flex justify-center gap-6 items-center pt-2">
+                        <button onClick={handlePrev} className="p-4 bg-white rounded-full shadow-md text-slate-600 hover:text-indigo-600 hover:scale-110 transition-all border border-slate-200">
+                            <Icons.ArrowLeft />
+                        </button>
+                        <button onClick={() => setIsFlipped(!isFlipped)} className="p-4 bg-white rounded-full shadow-md text-slate-600 hover:text-indigo-600 hover:scale-110 transition-all border border-slate-200 sm:hidden">
+                            <Icons.RotateCcw />
+                        </button>
+                        <button onClick={handleNext} className="p-4 bg-white rounded-full shadow-md text-slate-600 hover:text-indigo-600 hover:scale-110 transition-all border border-slate-200">
+                            <Icons.ArrowRight />
+                        </button>
+                    </div>
+                </div>
+            );
+        }
+
+        // ==========================================
+        // VIEW: Learn Mode
+        // ==========================================
+        function LearnModeView({ set, onBack, orientation, updateCardStatus }) {
+            const [queue, setQueue] = useState([]);
+            const [currentQ, setCurrentQ] = useState(null);
+            const [options, setOptions] = useState([]);
+            const [correctAnswer, setCorrectAnswer] = useState('');
+            const [status, setStatus] = useState('answering'); 
+            const [selectedOption, setSelectedOption] = useState(null);
+            
+            const [correctCount, setCorrectCount] = useState(0);
+            const [wrongCount, setWrongCount] = useState(0);
+
+            useEffect(() => {
+                const shuffled = shuffle([...set.cards]);
+                setQueue(shuffled);
+                generateQuestion(shuffled[0], set.cards, orientation);
+            }, [orientation]);
+
+            const generateQuestion = (card, allCards, currentOrientation) => {
+                if (!card) {
+                    setStatus('finished');
+                    return;
+                }
+
+                // Question is the front side, Answer is the back side
+                const questionSide = currentOrientation === 'term-def' ? card.term : card.def;
+                const answerSide = currentOrientation === 'term-def' ? card.def : card.term;
+
+                const otherCards = allCards.filter(c => c.id !== card.id);
+                let distractors = [];
+                
+                if (otherCards.length > 0) {
+                     distractors = shuffle(otherCards)
+                        .slice(0, 3)
+                        .map(c => currentOrientation === 'term-def' ? c.def : c.term) 
+                        .filter(d => d !== answerSide) 
+                        .slice(0, 3);
+                }
+                
+                const allOptions = shuffle([answerSide, ...distractors]);
+
+                setCurrentQ(card);
+                setCorrectAnswer(answerSide);
+                setOptions(allOptions);
+                setStatus('answering');
+                setSelectedOption(null);
+                speakText(questionSide);
+            };
+
+            const handleAnswer = (option) => {
+                if (status !== 'answering') return;
+                setSelectedOption(option);
+                
+                if (option === correctAnswer) {
+                    setStatus('correct');
+                    setCorrectCount(prev => prev + 1);
+                    updateCardStatus(set.id, currentQ.id, 'correct'); // NEW: Update status
+                } else {
+                    setStatus('wrong');
+                    setWrongCount(prev => prev + 1);
+                    updateCardStatus(set.id, currentQ.id, 'wrong'); // NEW: Update status
+                }
+            };
+
+            const nextQuestion = () => {
+                const nextQueue = queue.slice(1);
+                // Nếu trả lời sai, thêm thẻ đó vào cuối hàng đợi để học lại
+                if (status === 'wrong') nextQueue.push(currentQ);
+                setQueue(nextQueue);
+                generateQuestion(nextQueue[0], set.cards, orientation);
+            };
+
+            if (status === 'finished') {
+                return (
+                    <div className="flex flex-col items-center justify-center min-h-[60vh] text-center space-y-6 animate-in zoom-in duration-300">
+                        <div className="bg-yellow-100 p-6 rounded-full text-yellow-600 mb-4">
+                            <Icons.Check />
+                        </div>
+                        <h2 className="text-3xl font-bold text-slate-800">Hoàn thành xuất sắc!</h2>
+                        <div className="grid grid-cols-2 gap-8 w-full max-w-sm mt-8">
+                            <div className="bg-green-100 p-4 rounded-xl text-green-800">
+                                <div className="text-3xl font-bold">{correctCount}</div>
+                                <div className="text-sm">Đúng ngay</div>
+                            </div>
+                            <div className="bg-orange-100 p-4 rounded-xl text-orange-800">
+                                <div className="text-3xl font-bold">{wrongCount}</div>
+                                <div className="text-sm">Cần học lại</div>
+                            </div>
+                        </div>
+                        <button onClick={onBack} className="mt-8 px-8 py-3 bg-indigo-600 text-white rounded-full font-bold hover:bg-indigo-700">
+                            Quay lại bộ thẻ
+                        </button>
+                    </div>
+                );
+            }
+            
+            const questionText = orientation === 'term-def' ? currentQ?.term : currentQ?.def;
+            const targetText = orientation === 'term-def' ? 'Định nghĩa' : 'Thuật ngữ';
+
+            return (
+                <div className="max-w-xl mx-auto space-y-6">
+                    <div className="flex justify-between items-center text-sm text-slate-500 font-medium">
+                        <span onClick={onBack} className="cursor-pointer hover:text-indigo-600">Thoát</span>
+                        <span>Còn lại: {queue.length}</span>
+                    </div>
+
+                    <div className="h-2 bg-slate-200 rounded-full overflow-hidden">
+                        <div 
+                            className="h-full bg-indigo-500 transition-all duration-500" 
+                            style={{ width: `${(1 - (queue.length / set.cards.length)) * 100}%` }}
+                        ></div>
+                    </div>
+
+                    <div className="bg-white rounded-2xl shadow-lg border border-slate-200 overflow-hidden">
+                        <div className="p-8 min-h-[200px] flex flex-col items-center justify-center text-center bg-slate-50 border-b border-slate-100">
+                            <p className="text-sm text-slate-500 mb-2">Tìm {targetText} cho:</p>
+                            <h3 className="text-2xl font-medium text-slate-800">{questionText}</h3>
+                            <button onClick={() => speakText(questionText)} className="mt-3 p-2 text-indigo-500 hover:bg-indigo-50 rounded-full">
+                                <Icons.Volume2 />
+                            </button>
+                        </div>
+
+                        <div className="p-4 space-y-3">
+                            {options.map((opt, idx) => {
+                                let itemClass = "w-full p-4 rounded-xl text-left border-2 transition-all font-medium text-slate-700 ";
+                                if (status === 'answering') {
+                                    itemClass += "border-slate-100 hover:border-indigo-300 hover:bg-indigo-50 cursor-pointer";
+                                } else {
+                                    if (opt === correctAnswer) itemClass += "border-green-500 bg-green-50 text-green-800";
+                                    else if (opt === selectedOption && status === 'wrong') itemClass += "border-red-500 bg-red-50 text-red-800";
+                                    else itemClass += "border-slate-100 opacity-50";
+                                }
+
+                                return (
+                                    <button 
+                                        key={idx} 
+                                        className={itemClass}
+                                        onClick={() => handleAnswer(opt)}
+                                        disabled={status !== 'answering'}
+                                    >
+                                        <div className="flex justify-between items-center">
+                                            <span>{opt}</span>
+                                            {status !== 'answering' && opt === correctAnswer && <Icons.Check />}
+                                        </div>
+                                    </button>
+                                );
+                            })}
+                        </div>
+
+                        {status !== 'answering' && (
+                            <div className="p-4 bg-slate-50 border-t border-slate-100 flex justify-center animate-in slide-in-from-bottom-5 duration-300">
+                                <button onClick={nextQuestion} className="w-full bg-indigo-600 text-white font-bold py-4 rounded-xl hover:bg-indigo-700 shadow-lg">
+                                    Tiếp tục
+                                </button>
+                            </div>
+                        )}
+                    </div>
+                </div>
+            );
+        }
+
+        const root = ReactDOM.createRoot(document.getElementById('root'));
+        root.render(<App />);
+    </script>
+</body>
+</html>
